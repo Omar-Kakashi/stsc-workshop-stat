@@ -128,6 +128,37 @@
                     <div id="column-filters" class="flex flex-wrap gap-2"></div>
                 </div>
                 
+                <!-- Row Filter -->
+                <div class="my-4 p-4 bg-blue-50 rounded-lg">
+                    <h4 class="font-medium text-gray-700 mb-2">Filter Rows:</h4>
+                    <div class="flex flex-wrap gap-4 items-end">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Column:</label>
+                            <select id="filter-column" class="border border-gray-300 rounded px-3 py-2 text-sm">
+                                <option value="">Select Column</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Filter Type:</label>
+                            <select id="filter-type" class="border border-gray-300 rounded px-3 py-2 text-sm">
+                                <option value="all">Show All</option>
+                                <option value="blanks">Show Blanks Only</option>
+                                <option value="non-blanks">Show Non-Blanks Only</option>
+                                <option value="equals">Equals</option>
+                                <option value="contains">Contains</option>
+                            </select>
+                        </div>
+                        <div id="filter-value-container" class="hidden">
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Value:</label>
+                            <input type="text" id="filter-value" class="border border-gray-300 rounded px-3 py-2 text-sm" placeholder="Enter value">
+                        </div>
+                        <div>
+                            <button id="apply-filter" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Apply Filter</button>
+                            <button id="clear-filter" class="bg-gray-500 text-white px-4 py-2 rounded text-sm hover:bg-gray-600 ml-2">Clear Filter</button>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="my-4 flex justify-end space-x-3">
                     <button id="add-row-button" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition">Add New Row</button>
                     <button id="refresh-button" class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition">Refresh Data</button>
@@ -152,10 +183,21 @@
 
         // Column visibility for filtering
         let visibleColumns = {};
+        
+        // Row filtering
+        let currentFilter = {
+            column: '',
+            type: 'all',
+            value: ''
+        };
 
         function createColumnFilters(headers) {
             const filterContainer = document.getElementById('column-filters');
             filterContainer.innerHTML = '';
+            
+            // Also populate the row filter column dropdown
+            const filterColumnSelect = document.getElementById('filter-column');
+            filterColumnSelect.innerHTML = '<option value="">Select Column</option>';
             
             headers.forEach((header, index) => {
                 // Initialize all columns as visible by default if not already set
@@ -170,6 +212,12 @@
                     <span class="text-sm">${header}</span>
                 `;
                 filterContainer.appendChild(checkbox);
+                
+                // Add to row filter dropdown
+                const option = document.createElement('option');
+                option.value = header;
+                option.textContent = header;
+                filterColumnSelect.appendChild(option);
             });
             
             // Add event listeners to checkboxes
@@ -182,6 +230,78 @@
                         renderFullTable('table-container', window.sheetData.headers, window.sheetData.values);
                     }
                 });
+            });
+        }
+
+        function applyRowFilter(data, headers) {
+            if (currentFilter.type === 'all' || !currentFilter.column) {
+                return data;
+            }
+            
+            const columnIndex = headers.indexOf(currentFilter.column);
+            if (columnIndex === -1) return data;
+            
+            return data.filter(row => {
+                const cellValue = (row[columnIndex] || '').toString().trim();
+                
+                switch (currentFilter.type) {
+                    case 'blanks':
+                        return cellValue === '';
+                    case 'non-blanks':
+                        return cellValue !== '';
+                    case 'equals':
+                        return cellValue.toLowerCase() === currentFilter.value.toLowerCase();
+                    case 'contains':
+                        return cellValue.toLowerCase().includes(currentFilter.value.toLowerCase());
+                    default:
+                        return true;
+                }
+            });
+
+        function setupRowFiltering() {
+            const filterTypeSelect = document.getElementById('filter-type');
+            const filterValueContainer = document.getElementById('filter-value-container');
+            const applyFilterBtn = document.getElementById('apply-filter');
+            const clearFilterBtn = document.getElementById('clear-filter');
+            
+            // Show/hide value input based on filter type
+            filterTypeSelect.addEventListener('change', (e) => {
+                const filterType = e.target.value;
+                if (filterType === 'equals' || filterType === 'contains') {
+                    filterValueContainer.classList.remove('hidden');
+                } else {
+                    filterValueContainer.classList.add('hidden');
+                }
+            });
+            
+            // Apply filter
+            applyFilterBtn.addEventListener('click', () => {
+                const columnSelect = document.getElementById('filter-column');
+                const typeSelect = document.getElementById('filter-type');
+                const valueInput = document.getElementById('filter-value');
+                
+                currentFilter = {
+                    column: columnSelect.value,
+                    type: typeSelect.value,
+                    value: valueInput.value.trim()
+                };
+                
+                if (window.sheetData) {
+                    renderFullTable('table-container', window.sheetData.headers, window.sheetData.values);
+                }
+            });
+            
+            // Clear filter
+            clearFilterBtn.addEventListener('click', () => {
+                currentFilter = { column: '', type: 'all', value: '' };
+                document.getElementById('filter-column').value = '';
+                document.getElementById('filter-type').value = 'all';
+                document.getElementById('filter-value').value = '';
+                filterValueContainer.classList.add('hidden');
+                
+                if (window.sheetData) {
+                    renderFullTable('table-container', window.sheetData.headers, window.sheetData.values);
+                }
             });
         }
 
@@ -463,7 +583,32 @@
              // Create column filters if not already created
              if (Object.keys(visibleColumns).length === 0) {
                 createColumnFilters(headers);
+                setupRowFiltering();
              }
+             
+             // Apply row filtering and keep track of original indices
+             const filteredDataWithIndices = data.map((row, index) => ({ row, originalIndex: index }))
+                 .filter(({ row }) => {
+                     if (currentFilter.type === 'all' || !currentFilter.column) return true;
+                     
+                     const columnIndex = headers.indexOf(currentFilter.column);
+                     if (columnIndex === -1) return true;
+                     
+                     const cellValue = (row[columnIndex] || '').toString().trim();
+                     
+                     switch (currentFilter.type) {
+                         case 'blanks':
+                             return cellValue === '';
+                         case 'non-blanks':
+                             return cellValue !== '';
+                         case 'equals':
+                             return cellValue.toLowerCase() === currentFilter.value.toLowerCase();
+                         case 'contains':
+                             return cellValue.toLowerCase().includes(currentFilter.value.toLowerCase());
+                         default:
+                             return true;
+                     }
+                 });
              
              let tableHtml = '<table id="data-table" class="min-w-full divide-y divide-gray-200 text-sm">';
              tableHtml += '<thead class="bg-gray-50"><tr>';
@@ -473,15 +618,21 @@
              });
              tableHtml += '<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Actions</th>';
              tableHtml += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-             data.forEach((row, rowIndex) => {
-                tableHtml += `<tr data-row-index="${rowIndex + 2}">`; // +2 to account for header row in sheet and 0-index
-                row.forEach((cell, cellIndex) => {
-                   const isVisible = visibleColumns[headers[cellIndex]] !== false; // Default to visible
-                   tableHtml += `<td class="px-4 py-2 whitespace-nowrap ${isVisible ? '' : 'hidden'}" contenteditable="true" data-col-index="${cellIndex}">${cell || ''}</td>`;
+             
+             if (filteredDataWithIndices.length === 0) {
+                tableHtml += '<tr><td colspan="' + (headers.length + 1) + '" class="px-4 py-8 text-center text-gray-500">No data matches the current filter.</td></tr>';
+             } else {
+                filteredDataWithIndices.forEach(({ row, originalIndex }) => {
+                    tableHtml += `<tr data-row-index="${originalIndex + 2}">`; // +2 to account for header row in sheet and 0-index
+                    row.forEach((cell, cellIndex) => {
+                       const isVisible = visibleColumns[headers[cellIndex]] !== false; // Default to visible
+                       tableHtml += `<td class="px-4 py-2 whitespace-nowrap ${isVisible ? '' : 'hidden'}" contenteditable="true" data-col-index="${cellIndex}">${cell || ''}</td>`;
+                    });
+                    tableHtml += `<td class="px-4 py-2 whitespace-nowrap"><button class="delete-row-btn bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600" data-row-index="${originalIndex + 2}">Delete</button></td>`;
+                    tableHtml += '</tr>';
                 });
-                tableHtml += `<td class="px-4 py-2 whitespace-nowrap"><button class="delete-row-btn bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600" data-row-index="${rowIndex + 2}">Delete</button></td>`;
-                tableHtml += '</tr>';
-             });
+             }
+             
              tableHtml += '</tbody></table>';
              container.innerHTML = tableHtml;
              
