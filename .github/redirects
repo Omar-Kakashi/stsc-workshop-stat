@@ -1,0 +1,3 @@
+# GitHub Pages
+# Set dashboard.html as the homepage
+index.html: dashboard.html

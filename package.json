@@ -1,0 +1,9 @@
+{
+  "name": "stsc-workshop-stat",
+  "version": "1.0.0",
+  "description": "Workshop Performance Dashboard",
+  "main": "dashboard.html",
+  "scripts": {},
+  "author": "Omar-Kakashi",
+  "license": "MIT"
+}
