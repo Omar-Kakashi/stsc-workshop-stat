@@ -130,14 +130,6 @@
         let timelineChartInstance = null;
         let monthlyAvgChartInstance = null;
 
-        signinButton.onclick = () => {
-            console.log('Sign-in button clicked');
-            handleAuthClick();
-        };
-        signoutButton.onclick = () => handleSignoutClick();
-        refreshButton.onclick = () => fetchData();
-        saveButton.onclick = () => saveData();
-
         function gapiLoaded() {
             console.log('gapiLoaded called');
             gapi.load('client', initializeGapiClient);
@@ -223,6 +215,15 @@
                 statusContainer.innerHTML = '<p>Please sign in to load your workshop data.</p>';
             }
         }
+
+        // Assign event handlers after all functions are defined
+        signinButton.onclick = () => {
+            console.log('Sign-in button clicked');
+            handleAuthClick();
+        };
+        signoutButton.onclick = () => handleSignoutClick();
+        refreshButton.onclick = () => fetchData();
+        saveButton.onclick = () => saveData();
         
         function arrayToObject(data) {
              if (data.length < 2) return [];
