@@ -107,6 +107,7 @@
             </details>
         </div>
     </main>
+
     <script>
         const API_KEY = 'AIzaSyDeVx02Q7C5c6LPHoWZGWkhOHX_AUWUS9k';
         const CLIENT_ID = '111775922342-vrlbpkhrmqklkb3afq1klss7br647u7d.apps.googleusercontent.com';
@@ -129,106 +130,62 @@
         let timelineChartInstance = null;
         let monthlyAvgChartInstance = null;
 
-        signinButton.onclick = () => handleAuthClick();
+        signinButton.onclick = () => {
+            console.log('Sign-in button clicked');
+            handleAuthClick();
+        };
         signoutButton.onclick = () => handleSignoutClick();
         refreshButton.onclick = () => fetchData();
         saveButton.onclick = () => saveData();
 
         function gapiLoaded() {
+            console.log('gapiLoaded called');
             gapi.load('client', initializeGapiClient);
         }
 
         async function initializeGapiClient() {
+            console.log('initializeGapiClient called');
             await gapi.client.init({
                 apiKey: API_KEY,
                 discoveryDocs: DISCOVERY_DOCS,
             });
             gapiInited = true;
+            console.log('gapiInited set to true');
             maybeEnableButtons();
         }
 
         function gisLoaded() {
+            console.log('gisLoaded called');
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
                 callback: '', // defined later
             });
             gisInited = true;
+            console.log('gisInited set to true');
             maybeEnableButtons();
         }
 
         function maybeEnableButtons() {
+            console.log('maybeEnableButtons called, gapiInited:', gapiInited, 'gisInited:', gisInited);
             if (gapiInited && gisInited) {
                 signinButton.style.display = 'block';
                 signinButton.disabled = false;
+                console.log('Sign-in button enabled');
             } else {
                 signinButton.disabled = true;
-            }
-        }
-        // ...existing code...
-    </script>
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-        // --- IMPORTANT: PASTE YOUR CREDENTIALS HERE ---
-        const API_KEY = 'AIzaSyDeVx02Q7C5c6LPHoWZGWkhOHX_AUWUS9k'; // From Step 3 in instructions
-        const CLIENT_ID = '111775922342-vrlbpkhrmqklkb3afq1klss7br647u7d.apps.googleusercontent.com'; // From Step 4 in instructions
-    // ---
-
-    const SPREADSHEET_ID = '1lpLSSzVXXFRnZx3ibanhAwfFxbbU3gKNKjexjMa8HVU';
-        const RANGE = 'Sheet2!A:N'; // Specify the full range you want to read and write
-        const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
-        const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
-
-        let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
-
-        const signinButton = document.getElementById('signin-button');
-        const signoutButton = document.getElementById('signout-button');
-        const refreshButton = document.getElementById('refresh-button');
-        const saveButton = document.getElementById('save-button');
-        const statusContainer = document.getElementById('status-container');
-        const dashboardContent = document.getElementById('dashboard-content');
-        
-        let timelineChartInstance = null;
-        let monthlyAvgChartInstance = null;
-
-        signinButton.onclick = () => handleAuthClick();
-        signoutButton.onclick = () => handleSignoutClick();
-        refreshButton.onclick = () => fetchData();
-        saveButton.onclick = () => saveData();
-
-        function gapiLoaded() {
-            gapi.load('client', initializeGapiClient);
-        }
-
-        async function initializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: DISCOVERY_DOCS,
-            });
-            gapiInited = true;
-            maybeEnableButtons();
-        }
-
-        function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // defined later
-            });
-            gisInited = true;
-            maybeEnableButtons();
-        }
-
-        function maybeEnableButtons() {
-            if (gapiInited && gisInited) {
-                signinButton.style.display = 'block';
+                console.log('Sign-in button disabled');
             }
         }
         
         function handleAuthClick() {
+            console.log('handleAuthClick called, tokenClient:', tokenClient);
+            if (!tokenClient) {
+                console.error('tokenClient is not initialized');
+                return;
+            }
             tokenClient.callback = async (resp) => {
+                console.log('OAuth callback received:', resp);
                 if (resp.error !== undefined) {
                     throw (resp);
                 }
@@ -236,8 +193,10 @@
             };
 
             if (gapi.client.getToken() === null) {
+                console.log('Requesting access token (consent)');
                 tokenClient.requestAccessToken({prompt: 'consent'});
             } else {
+                console.log('Requesting access token (no prompt)');
                 tokenClient.requestAccessToken({prompt: ''});
             }
         }
@@ -572,7 +531,8 @@
                  console.error(err);
             }
         }
-
     </script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
 </html>
