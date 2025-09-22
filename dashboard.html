@@ -9,7 +9,29 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+               const monthlyData = data.reduce((acc, r) => {
+                const stopTime = parseDate(r['Stop time']);
+                let duration = 0;
+                
+                // Calculate duration from stop time to delivery date for delivered cars
+                if (r.Delivered && r.Delivered.toUpperCase() === 'TRUE') {
+                    const deliveryDate = parseDate(r['Delivery date']);
+                    if (stopTime && deliveryDate) {
+                        duration = Math.floor((deliveryDate - stopTime) / (1000 * 3600 * 24)) + 1;
+                    }
+                } else {
+                    // For cars still in workshop, use Duration of Stoppage field if available
+                    duration = parseInt(r['Duration of Stoppage'], 10);
+                }
+                
+                if (stopTime && !isNaN(duration) && duration > 0) {
+                    const month = stopTime.toLocaleString('default', { month: 'short', year: '2-digit' });
+                    if (!acc[month]) acc[month] = { totalDays: 0, count: 0 };
+                    acc[month].totalDays += duration;
+                    acc[month].count++;
+                }
+                return acc;
+            }, {});nt-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
         }
         .kpi-card {
@@ -99,6 +121,13 @@
             <!-- Raw Data Table -->
             <details class="bg-white p-6 rounded-xl shadow-lg mt-8" open>
                 <summary class="font-semibold text-lg cursor-pointer">View & Edit Full Raw Data</summary>
+                
+                <!-- Column Filter -->
+                <div class="my-4 p-4 bg-gray-50 rounded-lg">
+                    <h4 class="font-medium text-gray-700 mb-2">Show/Hide Columns:</h4>
+                    <div id="column-filters" class="flex flex-wrap gap-2"></div>
+                </div>
+                
                 <div class="my-4 flex justify-end space-x-3">
                     <button id="add-row-button" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition">Add New Row</button>
                     <button id="refresh-button" class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition">Refresh Data</button>
@@ -120,6 +149,41 @@
         let tokenClient;
         let gapiInited = false;
         let gisInited = false;
+
+        // Column visibility for filtering
+        let visibleColumns = {};
+
+        function createColumnFilters(headers) {
+            const filterContainer = document.getElementById('column-filters');
+            filterContainer.innerHTML = '';
+            
+            headers.forEach((header, index) => {
+                // Initialize all columns as visible by default
+                if (visibleColumns[header] === undefined) {
+                    visibleColumns[header] = true;
+                }
+                
+                const checkbox = document.createElement('label');
+                checkbox.className = 'flex items-center space-x-2 bg-white px-3 py-1 rounded border';
+                checkbox.innerHTML = `
+                    <input type="checkbox" class="column-filter-checkbox" data-column="${header}" ${visibleColumns[header] ? 'checked' : ''}>
+                    <span class="text-sm">${header}</span>
+                `;
+                filterContainer.appendChild(checkbox);
+            });
+            
+            // Add event listeners to checkboxes
+            document.querySelectorAll('.column-filter-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const column = e.target.getAttribute('data-column');
+                    visibleColumns[column] = e.target.checked;
+                    // Re-render the table with updated visibility
+                    if (window.sheetData) {
+                        renderFullTable('table-container', window.sheetData.headers, window.sheetData.values);
+                    }
+                });
+            });
+        }
 
         const signinButton = document.getElementById('signin-button');
         const signoutButton = document.getElementById('signout-button');
@@ -163,6 +227,21 @@
         function maybeEnableButtons() {
             console.log('maybeEnableButtons called, gapiInited:', gapiInited, 'gisInited:', gisInited);
             if (gapiInited && gisInited) {
+                // Try to restore saved token
+                const savedToken = localStorage.getItem('gapi_token');
+                if (savedToken) {
+                    try {
+                        const token = JSON.parse(savedToken);
+                        gapi.client.setToken(token);
+                        console.log('Restored saved token');
+                        updateSigninStatus(true);
+                        return;
+                    } catch (e) {
+                        console.error('Failed to restore token:', e);
+                        localStorage.removeItem('gapi_token');
+                    }
+                }
+                
                 signinButton.style.display = 'block';
                 signinButton.disabled = false;
                 console.log('Sign-in button enabled');
@@ -209,12 +288,19 @@
                 signinButton.style.display = 'none';
                 signoutButton.style.display = 'block';
                 statusContainer.innerHTML = '';
+                // Save credentials to localStorage
+                const token = gapi.client.getToken();
+                if (token) {
+                    localStorage.setItem('gapi_token', JSON.stringify(token));
+                }
                 fetchData();
             } else {
                 signinButton.style.display = 'block';
                 signoutButton.style.display = 'none';
                 dashboardContent.classList.add('hidden');
                 statusContainer.innerHTML = '<p>Please sign in to load your workshop data.</p>';
+                // Clear saved credentials
+                localStorage.removeItem('gapi_token');
             }
         }
 
@@ -373,15 +459,29 @@
                 container.innerHTML = '<p class="text-gray-500 p-4">No data to display.</p>';
                 return;
              }
+             
+             // Create column filters if not already created
+             if (Object.keys(visibleColumns).length === 0) {
+                createColumnFilters(headers);
+             }
+             
+             // Filter headers and data based on visible columns
+             const visibleHeaders = headers.filter(header => visibleColumns[header]);
+             const visibleData = data.map(row => 
+                row.filter((cell, index) => visibleColumns[headers[index]])
+             );
+             
              let tableHtml = '<table id="data-table" class="min-w-full divide-y divide-gray-200 text-sm">';
              tableHtml += '<thead class="bg-gray-50"><tr>';
-             headers.forEach(h => tableHtml += `<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">${h}</th>`);
+             visibleHeaders.forEach(h => tableHtml += `<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">${h}</th>`);
              tableHtml += '<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Actions</th>';
              tableHtml += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-             data.forEach((row, rowIndex) => {
+             visibleData.forEach((row, rowIndex) => {
                 tableHtml += `<tr data-row-index="${rowIndex + 2}">`; // +2 to account for header row in sheet and 0-index
                 row.forEach((cell, cellIndex) => {
-                   tableHtml += `<td class="px-4 py-2 whitespace-nowrap" contenteditable="true" data-col-index="${cellIndex}">${cell || ''}</td>`;
+                   // Map back to original column index for editing
+                   const originalColIndex = headers.findIndex(h => visibleColumns[h] && visibleHeaders[cellIndex] === h);
+                   tableHtml += `<td class="px-4 py-2 whitespace-nowrap" contenteditable="true" data-col-index="${originalColIndex}">${cell || ''}</td>`;
                 });
                 tableHtml += `<td class="px-4 py-2 whitespace-nowrap"><button class="delete-row-btn bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600" data-row-index="${rowIndex + 2}">Delete</button></td>`;
                 tableHtml += '</tr>';
@@ -460,7 +560,19 @@
 
             const monthlyData = data.reduce((acc, r) => {
                 const stopTime = parseDate(r['Stop time']);
-                const duration = parseInt(r['Duration of Stoppage'], 10);
+                let duration = 0;
+                
+                // Calculate duration from stop time to delivery date for delivered cars
+                if (r.Delivered && r.Delivered.toUpperCase() === 'TRUE') {
+                    const deliveryDate = parseDate(r['Delivery date']);
+                    if (stopTime && deliveryDate) {
+                        duration = Math.floor((deliveryDate - stopTime) / (1000 * 3600 * 24)) + 1;
+                    }
+                } else {
+                    // For cars still in workshop, use Duration of Stoppage field if available
+                    duration = parseInt(r['Duration of Stoppage'], 10);
+                }
+                
                 if (stopTime && !isNaN(duration) && duration > 0) {
                     const month = stopTime.toLocaleString('default', { month: 'short', year: '2-digit' });
                     if (!acc[month]) acc[month] = { totalDays: 0, count: 0 };
