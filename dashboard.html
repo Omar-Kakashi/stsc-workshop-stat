@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workshop Performance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .kpi-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        [contenteditable="true"]:focus {
+            outline: 2px solid #3b82f6;
+            background-color: #eff6ff;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <header class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-900">🚗 Workshop Performance Dashboard</h1>
+            <div>
+                <button id="signin-button" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">Sign In</button>
+                <button id="signout-button" class="hidden bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition">Sign Out</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-8">
+        <div id="status-container" class="text-center my-4 h-10 flex items-center justify-center">
+            <p>Please sign in to load your workshop data.</p>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-content" class="hidden">
+            <!-- KPIs -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="kpi-card">
+                    <h3 class="text-gray-500 font-medium">Cars in Workshop</h3>
+                    <p id="cars-in-workshop" class="text-4xl font-bold text-blue-600 mt-2">0</p>
+                </div>
+                <div class="kpi-card">
+                    <h3 class="text-gray-500 font-medium">Cars Delivered</h3>
+                    <p id="cars-delivered" class="text-4xl font-bold text-green-600 mt-2">0</p>
+                </div>
+                 <div class="kpi-card">
+                    <h3 class="text-gray-500 font-medium">Cars Over 30 Days</h3>
+                    <p id="cars-over-30-days" class="text-4xl font-bold text-red-600 mt-2">0</p>
+                </div>
+                <div class="kpi-card">
+                    <h3 class="text-gray-500 font-medium">Accident Repairs</h3>
+                    <p id="accident-repairs" class="text-4xl font-bold text-orange-600 mt-2">0</p>
+                </div>
+            </div>
+            
+            <!-- Timeline Chart -->
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <h3 class="text-lg font-semibold mb-4">Cars at Workshop Over Time</h3>
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="timeline-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Repair Classification Table -->
+             <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                <h3 class="text-lg font-semibold mb-4">Repair Classification for Cars in Workshop</h3>
+                <div id="repair-classification-table-container" class="overflow-x-auto"></div>
+            </div>
+            
+            <!-- Advanced Stats -->
+             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-lg font-semibold mb-4">Avg. Days in Workshop (By Month)</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="monthly-avg-chart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-lg font-semibold mb-4">Cars Over 30 Days in Workshop</h3>
+                    <div id="over-30-days-list" class="max-h-80 overflow-y-auto"></div>
+                </div>
+            </div>
+            
+            <!-- Raw Data Table -->
+            <details class="bg-white p-6 rounded-xl shadow-lg mt-8" open>
+                <summary class="font-semibold text-lg cursor-pointer">View & Edit Full Raw Data</summary>
+                <div class="my-4 flex justify-end space-x-3">
+                    <button id="refresh-button" class="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition">Refresh Data</button>
+                    <button id="save-button" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition">Save Changes to Sheet</button>
+                </div>
+                <div id="table-container" class="overflow-x-auto mt-4"></div>
+            </details>
+        </div>
+    </main>
+
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    
+    <script>
+        // --- IMPORTANT: PASTE YOUR CREDENTIALS HERE ---
+        const API_KEY = 'AIzaSyDeVx02Q7C5c6LPHoWZGWkhOHX_AUWUS9k'; // From Step 3 in instructions
+        const CLIENT_ID = '111775922342-vrlbpkhrmqklkb3afq1klss7br647u7d.apps.googleusercontent.com'; // From Step 4 in instructions
+        // ---
+
+        const SPREADSHEET_ID = '1n1A5Ka7fpJwjEdXb5uSxzq_y8zJ29eairVg3yJA2-F6';
+        const RANGE = 'Sheet2!A:N'; // Specify the full range you want to read and write
+        const DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+        const SCOPES = "https://www.googleapis.com/auth/spreadsheets";
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        const signinButton = document.getElementById('signin-button');
+        const signoutButton = document.getElementById('signout-button');
+        const refreshButton = document.getElementById('refresh-button');
+        const saveButton = document.getElementById('save-button');
+        const statusContainer = document.getElementById('status-container');
+        const dashboardContent = document.getElementById('dashboard-content');
+        
+        let timelineChartInstance = null;
+        let monthlyAvgChartInstance = null;
+
+        signinButton.onclick = () => handleAuthClick();
+        signoutButton.onclick = () => handleSignoutClick();
+        refreshButton.onclick = () => fetchData();
+        saveButton.onclick = () => saveData();
+
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: DISCOVERY_DOCS,
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // defined later
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                signinButton.style.display = 'block';
+            }
+        }
+        
+        function handleAuthClick() {
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    throw (resp);
+                }
+                updateSigninStatus(true);
+            };
+
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                tokenClient.requestAccessToken({prompt: ''});
+            }
+        }
+        
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                updateSigninStatus(false);
+            }
+        }
+
+        function updateSigninStatus(isSignedIn) {
+            if (isSignedIn) {
+                signinButton.style.display = 'none';
+                signoutButton.style.display = 'block';
+                statusContainer.innerHTML = '';
+                fetchData();
+            } else {
+                signinButton.style.display = 'block';
+                signoutButton.style.display = 'none';
+                dashboardContent.classList.add('hidden');
+                statusContainer.innerHTML = '<p>Please sign in to load your workshop data.</p>';
+            }
+        }
+        
+        function arrayToObject(data) {
+             if (data.length < 2) return [];
+             const headers = data[0].map(h => h ? h.trim() : '');
+             const rows = data.slice(1);
+             return rows.map(row => {
+                 const obj = {};
+                 headers.forEach((header, i) => {
+                     obj[header] = row[i] || '';
+                 });
+                 return obj;
+             });
+        }
+        
+        function parseDate(dateStr) {
+            if (!dateStr || !dateStr.trim()) return null;
+            // Try parsing formats like "DD-Mon" e.g., "12-Sep"
+            const shortFormat = dateStr.match(/(\d{1,2})-(\w{3})/);
+            if(shortFormat && shortFormat.length === 3) {
+                const day = shortFormat[1];
+                const month = shortFormat[2];
+                const currentYear = new Date().getFullYear();
+                let date = new Date(`${day} ${month} ${currentYear}`);
+                // If the parsed date is in the future, assume it was last year
+                if (date > new Date() && Math.abs(date.getMonth() - new Date().getMonth()) > 2) {
+                    date = new Date(`${day} ${month} ${currentYear - 1}`);
+                }
+                return isNaN(date.getTime()) ? null : date;
+            }
+            // Fallback for other JS-parsable formats like YYYY-MM-DD
+            const date = new Date(dateStr);
+            return isNaN(date.getTime()) ? null : date;
+        }
+        
+        function renderBarChart(canvasId, labels, data, label) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            let instance;
+            if (canvasId === 'monthly-avg-chart') instance = monthlyAvgChartInstance;
+
+            if (instance) instance.destroy();
+
+            instance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true }, x: { beginAtZero: true } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+
+            if (canvasId === 'monthly-avg-chart') monthlyAvgChartInstance = instance;
+        }
+        
+        function renderLineChart(labels, data) {
+            const ctx = document.getElementById('timeline-chart').getContext('2d');
+            if (timelineChartInstance) timelineChartInstance.destroy();
+            timelineChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Cars in Workshop',
+                        data: data,
+                        fill: true,
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        tension: 0.1,
+                        pointRadius: 2,
+                    }]
+                },
+                options: {
+                    scales: { 
+                        y: { 
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1 
+                            }
+                        } 
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        
+        function renderPivotTable(containerId, data) {
+            const container = document.getElementById(containerId);
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 p-4">No cars currently in workshop.</p>';
+                return;
+            }
+
+            const pivotData = {};
+            const vehicleTypes = new Set();
+            const repairTypes = new Set();
+
+            data.forEach(row => {
+                const vehicle = (row['Veh.Type'] || 'Unknown').trim();
+                const repair = (row['Notes'] || 'Unclassified').trim();
+                vehicleTypes.add(vehicle);
+                repairTypes.add(repair);
+
+                if (!pivotData[vehicle]) {
+                    pivotData[vehicle] = {};
+                }
+                pivotData[vehicle][repair] = (pivotData[vehicle][repair] || 0) + 1;
+            });
+            
+            const sortedVehicles = [...vehicleTypes].sort();
+            const sortedRepairs = [...repairTypes].sort();
+
+            let tableHtml = '<table class="min-w-full divide-y divide-gray-200 text-sm text-center">';
+            tableHtml += '<thead class="bg-gray-100"><tr>';
+            tableHtml += '<th class="px-4 py-3 text-left font-semibold text-gray-600 uppercase tracking-wider sticky left-0 bg-gray-100 z-10">Vehicle / Repair Type</th>';
+            sortedRepairs.forEach(h => tableHtml += `<th class="px-4 py-3 font-semibold text-gray-600 uppercase tracking-wider whitespace-nowrap">${h}</th>`);
+            tableHtml += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+            
+            sortedVehicles.forEach(vehicle => {
+                tableHtml += '<tr>';
+                tableHtml += `<td class="px-4 py-2 font-medium text-gray-800 text-left sticky left-0 bg-white z-10">${vehicle}</td>`;
+                sortedRepairs.forEach(repair => {
+                    const count = pivotData[vehicle] ? (pivotData[vehicle][repair] || 0) : 0;
+                    tableHtml += `<td class="px-4 py-2 whitespace-nowrap ${count > 0 ? 'font-bold text-blue-700' : 'text-gray-400'}">${count}</td>`;
+                });
+                tableHtml += '</tr>';
+             });
+             tableHtml += '</tbody></table>';
+             container.innerHTML = tableHtml;
+        }
+
+        function renderFullTable(containerId, headers, data) {
+             const container = document.getElementById(containerId);
+             if (!data || data.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 p-4">No data to display.</p>';
+                return;
+             }
+             let tableHtml = '<table id="data-table" class="min-w-full divide-y divide-gray-200 text-sm">';
+             tableHtml += '<thead class="bg-gray-50"><tr>';
+             headers.forEach(h => tableHtml += `<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">${h}</th>`);
+             tableHtml += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+             data.forEach((row, rowIndex) => {
+                tableHtml += `<tr data-row-index="${rowIndex + 2}">`; // +2 to account for header row in sheet and 0-index
+                row.forEach((cell, cellIndex) => {
+                   tableHtml += `<td class="px-4 py-2 whitespace-nowrap" contenteditable="true" data-col-index="${cellIndex}">${cell || ''}</td>`;
+                });
+                tableHtml += '</tr>';
+             });
+             tableHtml += '</tbody></table>';
+             container.innerHTML = tableHtml;
+        }
+
+        function updateDashboard(apiResponse) {
+            // Store the original headers and raw values for saving later
+            window.sheetData = { headers: apiResponse[0], values: apiResponse.slice(1) };
+
+            const data = arrayToObject(apiResponse);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const deliveredCars = data.filter(r => r.Delivered && r.Delivered.toUpperCase() === 'TRUE').length;
+            const activeCarsData = data
+                .filter(r => !(r.Delivered && r.Delivered.toUpperCase() === 'TRUE'))
+                .map(r => {
+                    const stopTime = parseDate(r['Stop time']);
+                    const daysInShop = stopTime ? Math.floor((today - stopTime) / (1000 * 3600 * 24)) + 1 : 0;
+                    return { ...r, 'Days In Shop': daysInShop };
+                });
+
+            document.getElementById('cars-in-workshop').innerText = activeCarsData.length;
+            document.getElementById('cars-delivered').innerText = deliveredCars;
+            
+            const carsOver30Days = activeCarsData.filter(r => r['Days In Shop'] > 30).length;
+            document.getElementById('cars-over-30-days').innerText = carsOver30Days;
+            
+            const accidentRepairs = data.filter(r => r.Notes && r.Notes.toUpperCase().includes('ACCIDNET')).length;
+            document.getElementById('accident-repairs').innerText = accidentRepairs;
+
+            const carRecords = data.map(r => {
+                const start = parseDate(r['Stop time']);
+                let end = null;
+                if (r.Delivered && r.Delivered.toUpperCase() === 'TRUE') {
+                    end = parseDate(r['Delivery date']); 
+                    if (!end && start) {
+                        end = start; // Fallback if delivery date is missing but marked delivered
+                    }
+                }
+                return { start, end };
+            }).filter(rec => rec.start);
+            
+            if (carRecords.length > 0) {
+                const firstDate = new Date(Math.min(...carRecords.map(r => r.start.getTime())));
+                const hasActiveCars = carRecords.some(r => !r.end);
+                const lastDeliveryDate = Math.max(...carRecords.filter(r => r.end).map(r => r.end.getTime()));
+                let chartEndDate = hasActiveCars ? today : new Date(lastDeliveryDate);
+                
+                if (isNaN(chartEndDate.getTime())) { // handle case where no cars delivered yet
+                     chartEndDate = today;
+                }
+
+                const labels = [], points = [];
+                for (let d = new Date(firstDate); d <= chartEndDate; d.setDate(d.getDate() + 1)) {
+                    const currentDay = new Date(d); // clone date for comparison
+                    const count = carRecords.filter(rec => rec.start <= currentDay && (!rec.end || rec.end > currentDay)).length;
+                    labels.push(currentDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                    points.push(count);
+                }
+                renderLineChart(labels, points);
+            }
+            
+            renderPivotTable('repair-classification-table-container', activeCarsData);
+
+            const monthlyData = data.reduce((acc, r) => {
+                const stopTime = parseDate(r['Stop time']);
+                const duration = parseInt(r['Duration of Stoppage'], 10);
+                if (stopTime && !isNaN(duration) && duration > 0) {
+                    const month = stopTime.toLocaleString('default', { month: 'short', year: '2-digit' });
+                    if (!acc[month]) acc[month] = { totalDays: 0, count: 0 };
+                    acc[month].totalDays += duration;
+                    acc[month].count++;
+                }
+                return acc;
+            }, {});
+            const monthlyLabels = Object.keys(monthlyData);
+            const monthlyAvgs = monthlyLabels.map(m => (monthlyData[m].totalDays / monthlyData[m].count).toFixed(1));
+            renderBarChart('monthly-avg-chart', monthlyLabels, monthlyAvgs, 'Avg. Days');
+            
+            const over30DaysContainer = document.getElementById('over-30-days-list');
+            let over30DaysHtml = '<ul class="divide-y divide-gray-200">';
+            if (carsOver30Days > 0) {
+                activeCarsData
+                  .filter(r => r['Days In Shop'] > 30)
+                  .sort((a, b) => b['Days In Shop'] - a['Days In Shop'])
+                  .forEach(car => {
+                    over30DaysHtml += `<li class="py-3 flex justify-between items-center"><span class="text-gray-700">${car['Veh.Type'] || 'Unknown'} (${car['License Plate'] || 'N/A'})</span><span class="font-bold bg-red-100 text-red-800 px-2 py-1 rounded-full text-sm">${car['Days In Shop']} days</span></li>`;
+                });
+            } else {
+                over30DaysHtml += `<li class="py-3 text-gray-500">No cars are currently over 30 days.</li>`;
+            }
+            over30DaysHtml += '</ul>';
+            over30DaysContainer.innerHTML = over30DaysHtml;
+
+            renderFullTable('table-container', window.sheetData.headers, window.sheetData.values);
+            
+            dashboardContent.classList.remove('hidden');
+        }
+
+        function showStatus(message, isError = false) {
+             statusContainer.innerHTML = `<p class="text-sm ${isError ? 'text-red-600' : 'text-gray-500'}">${message}</p>`;
+        }
+        
+        async function fetchData() {
+            showStatus('Fetching data...');
+            try {
+                const response = await gapi.client.sheets.spreadsheets.values.get({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: RANGE,
+                });
+                const values = response.result.values || [];
+                if (values.length > 0) {
+                    updateDashboard(values);
+                    showStatus(`Dashboard updated at ${new Date().toLocaleTimeString()}`);
+                } else {
+                   throw new Error("No data found in the specified range.");
+                }
+            } catch (err) {
+                showStatus(`Error: ${err.result.error.message}`, true);
+                console.error(err);
+            }
+        }
+
+        async function saveData() {
+            showStatus('Saving changes...');
+            const table = document.getElementById('data-table');
+            const rows = table.querySelectorAll('tbody tr');
+            const newData = Array.from(rows).map(row => 
+                Array.from(row.querySelectorAll('td')).map(td => td.innerText)
+            );
+
+            // Combine headers with the new data for the update payload
+            const updatedValues = [window.sheetData.headers, ...newData];
+
+            try {
+                 const response = await gapi.client.sheets.spreadsheets.values.update({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: RANGE,
+                    valueInputOption: 'USER_ENTERED',
+                    resource: {
+                        values: updatedValues
+                    }
+                });
+                showStatus('Changes saved successfully!', false);
+                // Refresh the dashboard with the newly saved data to ensure consistency
+                fetchData();
+            } catch (err) {
+                 showStatus(`Error saving data: ${err.result.error.message}`, true);
+                 console.error(err);
+            }
+        }
+
+    </script>
+</body>
+</html>
