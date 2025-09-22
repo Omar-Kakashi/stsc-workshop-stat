@@ -9,29 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-               const monthlyData = data.reduce((acc, r) => {
-                const stopTime = parseDate(r['Stop time']);
-                let duration = 0;
-                
-                // Calculate duration from stop time to delivery date for delivered cars
-                if (r.Delivered && r.Delivered.toUpperCase() === 'TRUE') {
-                    const deliveryDate = parseDate(r['Delivery date']);
-                    if (stopTime && deliveryDate) {
-                        duration = Math.floor((deliveryDate - stopTime) / (1000 * 3600 * 24)) + 1;
-                    }
-                } else {
-                    // For cars still in workshop, use Duration of Stoppage field if available
-                    duration = parseInt(r['Duration of Stoppage'], 10);
-                }
-                
-                if (stopTime && !isNaN(duration) && duration > 0) {
-                    const month = stopTime.toLocaleString('default', { month: 'short', year: '2-digit' });
-                    if (!acc[month]) acc[month] = { totalDays: 0, count: 0 };
-                    acc[month].totalDays += duration;
-                    acc[month].count++;
-                }
-                return acc;
-            }, {});nt-family: 'Inter', sans-serif;
+            font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
         }
         .kpi-card {
@@ -370,6 +348,13 @@
                 console.log('Sign-in button disabled');
             }
         }
+        
+        // Add event listeners
+        signinButton.addEventListener('click', handleAuthClick);
+        signoutButton.addEventListener('click', handleSignoutClick);
+        refreshButton.addEventListener('click', fetchData);
+        saveButton.addEventListener('click', saveData);
+        addRowButton.addEventListener('click', addNewRow);
         
         function handleAuthClick() {
             console.log('handleAuthClick called, tokenClient:', tokenClient);
@@ -870,12 +855,10 @@
                         values: updatedValues
                     }
                 });
-                showStatus('Changes saved successfully!', false);
-                // Refresh the dashboard with the newly saved data to ensure consistency
                 fetchData();
             } catch (err) {
-                 showStatus(`Error saving data: ${err.result.error.message}`, true);
-                 console.error(err);
+                showStatus(`Error saving data: ${err.result.error.message}`, true);
+                console.error(err);
             }
         }
     </script>
