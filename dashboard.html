@@ -158,13 +158,13 @@
             filterContainer.innerHTML = '';
             
             headers.forEach((header, index) => {
-                // Initialize all columns as visible by default
+                // Initialize all columns as visible by default if not already set
                 if (visibleColumns[header] === undefined) {
                     visibleColumns[header] = true;
                 }
                 
                 const checkbox = document.createElement('label');
-                checkbox.className = 'flex items-center space-x-2 bg-white px-3 py-1 rounded border';
+                checkbox.className = 'flex items-center space-x-2 bg-white px-3 py-1 rounded border cursor-pointer hover:bg-gray-50';
                 checkbox.innerHTML = `
                     <input type="checkbox" class="column-filter-checkbox" data-column="${header}" ${visibleColumns[header] ? 'checked' : ''}>
                     <span class="text-sm">${header}</span>
@@ -465,23 +465,19 @@
                 createColumnFilters(headers);
              }
              
-             // Filter headers and data based on visible columns
-             const visibleHeaders = headers.filter(header => visibleColumns[header]);
-             const visibleData = data.map(row => 
-                row.filter((cell, index) => visibleColumns[headers[index]])
-             );
-             
              let tableHtml = '<table id="data-table" class="min-w-full divide-y divide-gray-200 text-sm">';
              tableHtml += '<thead class="bg-gray-50"><tr>';
-             visibleHeaders.forEach(h => tableHtml += `<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">${h}</th>`);
+             headers.forEach((h, index) => {
+                const isVisible = visibleColumns[h] !== false; // Default to visible
+                tableHtml += `<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider ${isVisible ? '' : 'hidden'}" data-col-index="${index}">${h}</th>`;
+             });
              tableHtml += '<th class="px-4 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Actions</th>';
              tableHtml += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
-             visibleData.forEach((row, rowIndex) => {
+             data.forEach((row, rowIndex) => {
                 tableHtml += `<tr data-row-index="${rowIndex + 2}">`; // +2 to account for header row in sheet and 0-index
                 row.forEach((cell, cellIndex) => {
-                   // Map back to original column index for editing
-                   const originalColIndex = headers.findIndex(h => visibleColumns[h] && visibleHeaders[cellIndex] === h);
-                   tableHtml += `<td class="px-4 py-2 whitespace-nowrap" contenteditable="true" data-col-index="${originalColIndex}">${cell || ''}</td>`;
+                   const isVisible = visibleColumns[headers[cellIndex]] !== false; // Default to visible
+                   tableHtml += `<td class="px-4 py-2 whitespace-nowrap ${isVisible ? '' : 'hidden'}" contenteditable="true" data-col-index="${cellIndex}">${cell || ''}</td>`;
                 });
                 tableHtml += `<td class="px-4 py-2 whitespace-nowrap"><button class="delete-row-btn bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600" data-row-index="${rowIndex + 2}">Delete</button></td>`;
                 tableHtml += '</tr>';
